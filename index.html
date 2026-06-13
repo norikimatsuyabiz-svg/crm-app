@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>顧客管理</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-gray-50 h-screen overflow-hidden">
+  <div id="app" class="h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 px-5 py-3 flex items-center gap-6 shrink-0 shadow-sm">
+      <h1 class="text-sm font-bold text-gray-900 tracking-wide">CRM</h1>
+      <nav class="flex gap-1">
+        <button id="btn-tab-customers" class="tab-btn tab-active">顧客</button>
+        <button id="btn-tab-pipeline" class="tab-btn">パイプライン</button>
+      </nav>
+    </header>
+
+    <!-- ビュー①: 顧客（ツーカラム） -->
+    <div id="view-customers" class="flex flex-1 overflow-hidden">
+
+      <!-- 左ペイン -->
+      <div class="flex flex-col border-r border-gray-200 bg-white shrink-0"
+           style="width: 340px; min-width: 340px;">
+        <div class="p-3 space-y-2 border-b border-gray-100">
+          <input id="input-search" type="text"
+                 placeholder="会社名・担当者名・役職で検索..."
+                 class="form-input text-sm">
+          <button id="btn-new-customer" class="btn-primary w-full py-2 text-sm">
+            ＋ 新規顧客
+          </button>
+        </div>
+        <div id="customer-list" class="flex-1 overflow-y-auto py-2"></div>
+      </div>
+
+      <!-- 右ペイン -->
+      <div class="flex-1 overflow-y-auto bg-white">
+        <!-- 空状態 -->
+        <div id="pane-empty" class="flex items-center justify-center h-full">
+          <div class="text-center text-gray-300">
+            <div class="text-5xl mb-3">🗂</div>
+            <p class="text-sm">顧客を選択してください</p>
+          </div>
+        </div>
+        <!-- 顧客詳細 -->
+        <div id="pane-customer-detail" class="hidden p-6"></div>
+        <!-- 顧客フォーム -->
+        <div id="pane-customer-form" class="hidden p-6" style="max-width: 560px;"></div>
+        <!-- 商談フォーム -->
+        <div id="pane-deal-form" class="hidden p-6" style="max-width: 560px;"></div>
+      </div>
+    </div>
+
+    <!-- ビュー②: パイプライン（カンバン3列） -->
+    <div id="view-pipeline" class="flex-1 overflow-hidden bg-gray-50" style="display:none;">
+      <div id="pipeline-board" class="flex h-full p-5 gap-0 overflow-x-auto"></div>
+    </div>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
