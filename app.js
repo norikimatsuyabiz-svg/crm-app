@@ -1,55 +1,35 @@
+import { supabase } from './lib/supabase.js'
+
 (function () {
   'use strict';
 
   // === 定数 ===
-  const STORAGE_CUSTOMERS = 'crm-customers';
-  const STORAGE_DEALS = 'crm-deals';
   const STATUS_LABELS = { lead: '見込み', proposal: '提案', won: '成約' };
-  const STATUS_ORDER = ['lead', 'proposal', 'won'];
+  const STATUS_ORDER  = ['lead', 'proposal', 'won'];
 
   // === 状態 ===
-  let customers = [];
-  let deals = [];
+  let customers          = [];
+  let deals              = [];
   let selectedCustomerId = null;
-  let searchQuery = '';
+  let searchQuery        = '';
 
-  // === ストレージ ===
-  function loadData() {
-    customers = JSON.parse(localStorage.getItem(STORAGE_CUSTOMERS) || '[]');
-    deals = JSON.parse(localStorage.getItem(STORAGE_DEALS) || '[]');
+  // === Supabase データ取得 ===
+  async function refreshCustomers() {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) { console.error('customers fetch:', error); return; }
+    customers = data;
   }
 
-  function saveCustomers() {
-    localStorage.setItem(STORAGE_CUSTOMERS, JSON.stringify(customers));
-  }
-
-  function saveDeals() {
-    localStorage.setItem(STORAGE_DEALS, JSON.stringify(deals));
-  }
-
-  // === 初期データ ===
-  function seedData() {
-    if (customers.length > 0) return;
-    const t = (offset) => new Date(Date.now() - offset).toISOString();
-    customers = [
-      { id: 'c_seed3', company: 'フォレスト・パートナーズ合同会社', contactName: '橘 みなみ', title: '事業開発マネージャー', email: 'tachibana@forest-p.example', phone: '', memo: '来季予算確定後に再提案予定', createdAt: t(1000) },
-      { id: 'c_seed2', company: 'ミドリ工業株式会社', contactName: '坂本 龍一郎', title: '代表取締役', email: 'sakamoto@midori-ind.example', phone: '06-9876-5432', memo: '', createdAt: t(2000) },
-      { id: 'c_seed1', company: '株式会社テラノバ', contactName: '北村 恵', title: '購買部長', email: 'kitamura@terranova.example', phone: '03-1234-5678', memo: '毎月第一週に定例打ち合わせあり', createdAt: t(3000) },
-    ];
-    const now = new Date().toISOString();
-    deals = [
-      { id: 'd_seed1', customerId: 'c_seed1', dealTitle: 'クラウド移行支援', amount: 1200000, status: 'won',      followUpMemo: '契約締結済み。次フェーズ検討中。', createdAt: now, updatedAt: now },
-      { id: 'd_seed2', customerId: 'c_seed1', dealTitle: '業務効率化ツール導入', amount: 480000, status: 'proposal', followUpMemo: '見積書送付済み。先方確認待ち。', createdAt: now, updatedAt: now },
-      { id: 'd_seed3', customerId: 'c_seed2', dealTitle: '製造ライン最適化コンサル', amount: 980000, status: 'proposal', followUpMemo: '社内稟議中。', createdAt: now, updatedAt: now },
-      { id: 'd_seed4', customerId: 'c_seed3', dealTitle: '新規事業調査レポート', amount: null, status: 'lead',     followUpMemo: '', createdAt: now, updatedAt: now },
-      { id: 'd_seed5', customerId: 'c_seed3', dealTitle: 'マーケティング支援契約', amount: 250000, status: 'lead', followUpMemo: '資料送付待ち。', createdAt: now, updatedAt: now },
-    ];
-    saveCustomers();
-    saveDeals();
-  }
-
-  function genId(prefix) {
-    return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  async function refreshDeals() {
+    const { data, error } = await supabase
+      .from('deals')
+      .select('*, customers(company)')
+      .order('created_at', { ascending: true });
+    if (error) { console.error('deals fetch:', error); return; }
+    deals = data;
   }
 
   // === ビュー切替 ===
@@ -72,11 +52,10 @@
   // === 顧客リスト ===
   function getFilteredCustomers() {
     const q = searchQuery.trim().toLowerCase();
-    const sorted = [...customers].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    if (!q) return sorted;
-    return sorted.filter(c =>
+    if (!q) return customers;
+    return customers.filter(c =>
       c.company.toLowerCase().includes(q) ||
-      c.contactName.toLowerCase().includes(q) ||
+      c.name.toLowerCase().includes(q) ||
       (c.title || '').toLowerCase().includes(q)
     );
   }
@@ -101,7 +80,7 @@
       (c.id === selectedCustomerId ? ' selected' : '');
     card.dataset.id = c.id;
 
-    const dealCount = deals.filter(d => d.customerId === c.id).length;
+    const dealCount = deals.filter(d => d.customer_id === c.id).length;
 
     const company = document.createElement('div');
     company.className = 'text-sm font-semibold text-gray-900 truncate';
@@ -109,7 +88,7 @@
 
     const meta = document.createElement('div');
     meta.className = 'text-xs text-gray-500 mt-0.5 truncate';
-    meta.textContent = c.contactName + (c.title ? ' · ' + c.title : '') + '　商談 ' + dealCount + '件';
+    meta.textContent = c.name + (c.title ? ' · ' + c.title : '') + '　商談 ' + dealCount + '件';
 
     card.appendChild(company);
     card.appendChild(meta);
@@ -146,7 +125,7 @@
     company.textContent = c.company;
     const contact = document.createElement('p');
     contact.className = 'text-sm text-gray-500 mt-1';
-    contact.textContent = c.contactName + (c.title ? ' · ' + c.title : '');
+    contact.textContent = c.name + (c.title ? ' · ' + c.title : '');
     left.appendChild(company);
     left.appendChild(contact);
 
@@ -210,7 +189,7 @@
     header.appendChild(btnAdd);
     wrap.appendChild(header);
 
-    const customerDeals = deals.filter(d => d.customerId === customerId);
+    const customerDeals = deals.filter(d => d.customer_id === customerId);
     if (customerDeals.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'text-center text-gray-400 text-sm py-8 border border-dashed rounded-lg';
@@ -235,7 +214,7 @@
     row.className = 'flex items-center justify-between gap-2';
     const titleEl = document.createElement('span');
     titleEl.className = 'text-sm font-medium text-gray-900 truncate';
-    titleEl.textContent = deal.dealTitle;
+    titleEl.textContent = deal.title;
     row.appendChild(titleEl);
     row.appendChild(buildStatusBadge(deal.status));
     card.appendChild(row);
@@ -272,11 +251,11 @@
     form.addEventListener('submit', e => { e.preventDefault(); saveCustomer(customerId); });
 
     [
-      { id: 'input-company',      label: '会社名',   required: true,  value: c?.company      || '', type: 'text' },
-      { id: 'input-contact-name', label: '担当者名', required: true,  value: c?.contactName  || '', type: 'text' },
-      { id: 'input-title',        label: '役職',     required: false, value: c?.title        || '', type: 'text' },
-      { id: 'input-email',        label: 'メール',   required: false, value: c?.email        || '', type: 'email' },
-      { id: 'input-phone',        label: '電話',     required: false, value: c?.phone        || '', type: 'tel' },
+      { id: 'input-company',      label: '会社名',   required: true,  value: c?.company || '', type: 'text' },
+      { id: 'input-contact-name', label: '担当者名', required: true,  value: c?.name    || '', type: 'text' },
+      { id: 'input-title',        label: '役職',     required: false, value: c?.title   || '', type: 'text' },
+      { id: 'input-email',        label: 'メール',   required: false, value: c?.email   || '', type: 'email' },
+      { id: 'input-phone',        label: '電話',     required: false, value: c?.phone   || '', type: 'tel' },
     ].forEach(f => form.appendChild(buildInputField(f)));
 
     form.appendChild(buildTextareaField('input-memo', 'メモ', c?.memo || '', 4));
@@ -345,42 +324,48 @@
     return row;
   }
 
-  function saveCustomer(customerId) {
+  async function saveCustomer(customerId) {
     const company = document.getElementById('input-company').value.trim();
-    const contactName = document.getElementById('input-contact-name').value.trim();
-    if (!company || !contactName) return;
+    const name    = document.getElementById('input-contact-name').value.trim();
+    if (!company || !name) return;
 
-    const data = {
+    const payload = {
       company,
-      contactName,
-      title:  document.getElementById('input-title').value.trim(),
-      email:  document.getElementById('input-email').value.trim(),
-      phone:  document.getElementById('input-phone').value.trim(),
-      memo:   document.getElementById('input-memo').value.trim(),
+      name,
+      title: document.getElementById('input-title').value.trim(),
+      email: document.getElementById('input-email').value.trim(),
+      phone: document.getElementById('input-phone').value.trim(),
+      memo:  document.getElementById('input-memo').value.trim(),
     };
 
     if (customerId) {
-      const idx = customers.findIndex(c => c.id === customerId);
-      customers[idx] = { ...customers[idx], ...data };
+      const { data: updated, error } = await supabase
+        .from('customers').update(payload).eq('id', customerId)
+        .select().single();
+      if (error) { alert('保存に失敗しました'); console.error(error); return; }
+      customers = customers.map(c => c.id === customerId ? updated : c);
+      await refreshDeals(); // 会社名変更を deal.customers に反映
     } else {
-      const newC = { id: genId('c'), ...data, createdAt: new Date().toISOString() };
-      customers.unshift(newC);
-      customerId = newC.id;
+      const { data: created, error } = await supabase
+        .from('customers').insert(payload).select().single();
+      if (error) { alert('保存に失敗しました'); console.error(error); return; }
+      customers.unshift(created);
+      customerId = created.id;
     }
 
-    saveCustomers();
     selectedCustomerId = customerId;
     renderCustomerList();
     renderCustomerDetail(customerId);
     showPane('customer-detail');
   }
 
-  function deleteCustomer(id) {
+  async function deleteCustomer(id) {
     if (!confirm('この顧客と紐付く商談をすべて削除しますか？\nこの操作は元に戻せません。')) return;
+    const { error } = await supabase.from('customers').delete().eq('id', id);
+    if (error) { alert('削除に失敗しました'); console.error(error); return; }
+    // ON DELETE CASCADE が DB 側で商談を削除するので、メモリも同期する
     customers = customers.filter(c => c.id !== id);
-    deals     = deals.filter(d => d.customerId !== id);
-    saveCustomers();
-    saveDeals();
+    deals     = deals.filter(d => d.customer_id !== id);
     selectedCustomerId = null;
     renderCustomerList();
     showPane('empty');
@@ -403,11 +388,13 @@
 
     form.appendChild(buildInputField({
       id: 'input-deal-title', label: '商談タイトル', required: true,
-      value: deal?.dealTitle || '', type: 'text',
+      value: deal?.title || '', type: 'text',
     }));
     form.appendChild(buildAmountField(deal?.amount ?? ''));
     form.appendChild(buildStatusSelect(deal?.status || 'lead'));
-    form.appendChild(buildTextareaField('input-follow-up-memo', 'フォローアップメモ', deal?.followUpMemo || '', 4));
+    form.appendChild(buildTextareaField(
+      'input-follow-up-memo', 'フォローアップメモ', deal?.memo || '', 4
+    ));
     form.appendChild(buildFormButtons(
       () => saveDeal(dealId, customerId),
       () => { renderCustomerDetail(customerId); showPane('customer-detail'); },
@@ -450,31 +437,41 @@
     return wrap;
   }
 
-  function saveDeal(dealId, customerId) {
-    const dealTitle = document.getElementById('input-deal-title').value.trim();
-    if (!dealTitle) return;
+  async function saveDeal(dealId, customerId) {
+    const title = document.getElementById('input-deal-title').value.trim();
+    if (!title) return;
     const amtVal = document.getElementById('input-deal-amount').value;
     const amount = amtVal !== '' ? parseInt(amtVal, 10) : null;
     const status = document.getElementById('input-deal-status').value;
-    const followUpMemo = document.getElementById('input-follow-up-memo').value.trim();
-    const now = new Date().toISOString();
+    const memo   = document.getElementById('input-follow-up-memo').value.trim();
+
+    const payload = { title, amount, status, memo };
 
     if (dealId) {
-      const idx = deals.findIndex(d => d.id === dealId);
-      deals[idx] = { ...deals[idx], dealTitle, amount, status, followUpMemo, updatedAt: now };
+      const { data: updated, error } = await supabase
+        .from('deals').update(payload).eq('id', dealId)
+        .select('*, customers(company)').single();
+      if (error) { alert('保存に失敗しました'); console.error(error); return; }
+      deals = deals.map(d => d.id === dealId ? updated : d);
     } else {
-      deals.push({ id: genId('d'), customerId, dealTitle, amount, status, followUpMemo, createdAt: now, updatedAt: now });
+      const { data: created, error } = await supabase
+        .from('deals').insert({ ...payload, customer_id: customerId })
+        .select('*, customers(company)').single();
+      if (error) { alert('保存に失敗しました'); console.error(error); return; }
+      deals.push(created);
     }
 
-    saveDeals();
+    renderCustomerList(); // 商談件数を更新
     renderCustomerDetail(customerId);
     showPane('customer-detail');
   }
 
-  function deleteDeal(dealId, customerId) {
+  async function deleteDeal(dealId, customerId) {
     if (!confirm('この商談を削除しますか？')) return;
+    const { error } = await supabase.from('deals').delete().eq('id', dealId);
+    if (error) { alert('削除に失敗しました'); console.error(error); return; }
     deals = deals.filter(d => d.id !== dealId);
-    saveDeals();
+    renderCustomerList(); // 商談件数を更新
     renderCustomerDetail(customerId);
     showPane('customer-detail');
   }
@@ -514,27 +511,25 @@
 
     const cardList = document.createElement('div');
     cardList.className = 'space-y-3 flex-1 overflow-y-auto';
-    colDeals.forEach(deal => {
-      const customer = customers.find(c => c.id === deal.customerId);
-      cardList.appendChild(buildPipelineCard(deal, customer, colIdx));
-    });
+    colDeals.forEach(deal => cardList.appendChild(buildPipelineCard(deal, colIdx)));
     col.appendChild(cardList);
     return col;
   }
 
-  function buildPipelineCard(deal, customer, colIdx) {
+  function buildPipelineCard(deal, colIdx) {
     const card = document.createElement('div');
     card.className = 'pipeline-card deal-card-' + deal.status +
       ' bg-white border border-gray-200 rounded-lg p-3 cursor-pointer hover:shadow transition-shadow';
 
     const titleEl = document.createElement('div');
     titleEl.className = 'text-sm font-medium text-gray-900 mb-1';
-    titleEl.textContent = deal.dealTitle;
+    titleEl.textContent = deal.title;
     card.appendChild(titleEl);
 
+    // select('*, customers(company)') で取得した会社名
     const companyEl = document.createElement('div');
     companyEl.className = 'text-xs text-gray-500';
-    companyEl.textContent = customer ? customer.company : '（顧客なし）';
+    companyEl.textContent = deal.customers?.company || '（顧客なし）';
     card.appendChild(companyEl);
 
     if (deal.amount !== null) {
@@ -572,20 +567,21 @@
     return row;
   }
 
-  function moveDeal(dealId, newStatus) {
-    const idx = deals.findIndex(d => d.id === dealId);
-    if (idx === -1) return;
-    deals[idx] = { ...deals[idx], status: newStatus, updatedAt: new Date().toISOString() };
-    saveDeals();
+  async function moveDeal(dealId, newStatus) {
+    const { data: updated, error } = await supabase
+      .from('deals').update({ status: newStatus }).eq('id', dealId)
+      .select('*, customers(company)').single();
+    if (error) { console.error(error); return; }
+    deals = deals.map(d => d.id === dealId ? updated : d);
     renderPipeline();
-    if (selectedCustomerId === deals[idx].customerId) renderCustomerDetail(selectedCustomerId);
+    if (updated.customer_id === selectedCustomerId) renderCustomerDetail(selectedCustomerId);
   }
 
   function openDealFromPipeline(deal) {
     switchView('customers');
-    selectedCustomerId = deal.customerId;
+    selectedCustomerId = deal.customer_id;
     renderCustomerList();
-    renderDealForm(deal.id, deal.customerId);
+    renderDealForm(deal.id, deal.customer_id);
   }
 
   // === イベント登録 ===
@@ -604,14 +600,13 @@
   }
 
   // === 起動 ===
-  function init() {
-    loadData();
-    seedData();
+  async function init() {
+    await Promise.all([refreshCustomers(), refreshDeals()]);
     setupEventListeners();
     renderCustomerList();
     switchView('customers');
     showPane('empty');
   }
 
-  init();
+  init().catch(console.error);
 })();
